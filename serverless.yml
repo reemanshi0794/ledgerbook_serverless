@@ -1,0 +1,349 @@
+org: ledgerbook
+app: ledgerbook
+useDotenv: true
+service: ledgerbook-backend
+frameworkVersion: "3"
+provider:
+  name: aws
+  runtime: nodejs14.x
+  stage: ${opt:stage, 'prod'}
+  region: ap-south-1
+  versionFunctions: false
+  environment:
+    CURRENTSTAGE: ${opt:stage, self:provider.stage}
+    USERS_TABLE: users-${opt:stage, self:provider.stage}
+    TRANSACTIONS_TABLE: transactions-${opt:stage, self:provider.stage}
+    OTP_TABLE: otp-${opt:stage, self:provider.stage}
+    CUSTOMERS_TABLE: customers-${opt:stage, self:provider.stage}
+    WEEKLYBAL_TABLE: weeklyBal-${opt:stage, self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DescribeTable
+        - dynamodb:DeleteItem
+        - lambda:InvokeFunction
+        - ssm:GetParameters
+        - ssm:GetParameter
+        - cognito-idp:ListUsers
+        - cognito-idp:AdminUpdateUserAttributes
+        - cognito-idp:AdminDeleteUser
+      Resource: "*"
+functions:
+  app:
+    handler: server.run
+    events:
+      - http:
+          path: /
+          method: ANY
+          cors: true
+      - http:
+          path: /{proxy+}
+          method: ANY
+          cors: true
+  createUser:
+    handler: api/user.createUser
+    events:
+      - http:
+          path: /createUser
+          method: post
+          cors: true
+  checkContent:
+    handler: api/user.checkContent
+    events:
+      - http:
+          path: /checkContent
+          method: post
+          cors: true
+  sendEmail:
+    handler: api/user.sendEmail
+    events:
+      - http:
+          path: /sendEmail
+          method: post
+          cors: true
+  sendOtp:
+    handler: api/user.sendOtp
+    memorySize: 128
+    description: Get a user by name and password
+    events:
+      - http:
+          path: /sendOtp
+          method: get
+          cors: true
+  validateUser:
+    handler: api/user.validateUser
+    memorySize: 128
+    description: Get a user by name and password
+    events:
+      - http:
+          path: /validateUser
+          method: post
+          cors: true
+  getUser:
+    handler: api/user.getUser
+    memorySize: 128
+    description: Get a user by user id
+    events:
+      - http:
+          path: /getUser/{userId}
+          method: get
+          cors: true
+  updateUser:
+    handler: api/user.updateUser
+    memorySize: 128
+    description: update a user by userid
+    events:
+      - http:
+          path: /updateUser/{id}
+          method: post
+          cors: true
+  deleteUser:
+    handler: api/user.deleteUser
+    memorySize: 128
+    description: delete a user by userid
+    events:
+      - http:
+          path: /deleteUser/{id}
+          method: post
+          cors: true
+  getTeamMembers:
+    handler: api/teamMembers.getTeamMembers
+    memorySize: 128
+    description: getTeamMembers
+    events:
+      - http:
+          path: /getTeamMembers/{id}
+          method: get
+          cors: true
+  createCustomer:
+    handler: api/customer.createCustomer
+    memorySize: 128
+    description: create new customer
+    events:
+      - http:
+          path: /createCustomer
+          method: post
+          cors: true
+  getCustomers:
+    handler: api/customer.getCustomers
+    memorySize: 128
+    description: getCustomers
+    events:
+      - http:
+          path: /getCustomers/{id}
+          method: get
+          cors: true
+  getCustomer:
+    handler: api/customer.getCustomer
+    memorySize: 128
+    description: getCustomer
+    events:
+      - http:
+          path: /getCustomer/{customerId}
+          method: get
+          cors: true
+  updateCustomer:
+    handler: api/customer.updateCustomer
+    memorySize: 128
+    description: update a user by customer id
+    events:
+      - http:
+          path: /updateCustomer/{id}
+          method: post
+          cors: true
+  deleteCustomer:
+    handler: api/customer.deleteCustomer
+    memorySize: 128
+    description: delete a customer by customer id
+    events:
+      - http:
+          path: /deleteCustomer/{id}
+          method: post
+          cors: true
+  createTransaction:
+    handler: api/transaction.createTransaction
+    memorySize: 128
+    description: createTransaction
+    events:
+      - http:
+          path: /createTransaction
+          method: post
+          cors: true
+  deleteTransaction:
+    handler: api/transaction.deleteTransaction
+    memorySize: 128
+    description: delete a transaction by transaction id
+    events:
+      - http:
+          path: /deleteTransaction/{id}
+          method: post
+          cors: true
+  getTransactions:
+    handler: api/transaction.getTransactions
+    memorySize: 128
+    description: getTransactions
+    events:
+      - http:
+          path: /getTransactions/{customerId}
+          method: get
+          cors: true
+  getAllOwnerTransactions:
+    handler: api/transaction.getAllOwnerTransactions
+    memorySize: 128
+    description: getAllOwnerTransactions
+    events:
+      - http:
+          path: /getAllOwnerTransactions/{ownerId}
+          method: get
+          cors: true
+  getPreSignedUrl:
+    handler: api/transaction.getPreSignedUrl
+    memorySize: 128
+    description: getPreSignedUrl
+    events:
+      - http:
+          path: /getPreSignedUrl
+          method: get
+          cors: true
+  getTransactionsReport:
+    handler: api/transactionReport.getTransactionsReport
+    memorySize: 128
+    description: getTransactionsReport
+    events:
+      - http:
+          path: /getTransactionsReport
+          method: get
+          cors: true
+resources:
+  Resources:
+    UsersDynamoDbTable:
+      Type: "AWS::DynamoDB::Table"
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: "id"
+            AttributeType: "S"
+          - AttributeName: "ownerId"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "id"
+            KeyType: "HASH"
+        GlobalSecondaryIndexes:
+          - IndexName: ownerIdIdx
+            KeySchema:
+              - AttributeName: "ownerId"
+                KeyType: "HASH"
+            Projection:
+              ProjectionType: "ALL"
+        # ProvisionedThroughput:
+        #   ReadCapacityUnits: 1
+        #   WriteCapacityUnits: 1
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.USERS_TABLE}
+    OtpTable:
+      Type: "AWS::DynamoDB::Table"
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: "phoneNo"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "phoneNo"
+            KeyType: "HASH"
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.OTP_TABLE}
+    TransactionsTable:
+      Type: "AWS::DynamoDB::Table"
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: "id"
+            AttributeType: "S"
+          - AttributeName: "customerId"
+            AttributeType: "S"
+          - AttributeName: "createdAt"
+            AttributeType: "N"
+          - AttributeName: "userId"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "id"
+            KeyType: "HASH"
+        GlobalSecondaryIndexes:
+          - IndexName: customerIdIdx
+            KeySchema:
+              - AttributeName: "customerId"
+                KeyType: "HASH"
+              - AttributeName: "createdAt"
+                KeyType: "RANGE"
+            Projection:
+              ProjectionType: "ALL"
+          - IndexName: userIdIdx
+            KeySchema:
+              - AttributeName: "userId"
+                KeyType: "HASH"
+            Projection:
+              ProjectionType: "ALL"
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.TRANSACTIONS_TABLE}
+    CustomersTable:
+      Type: "AWS::DynamoDB::Table"
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: "id"
+            AttributeType: "S"
+          - AttributeName: "userId"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "id"
+            KeyType: "HASH"
+        GlobalSecondaryIndexes:
+          - IndexName: userIdIdx
+            KeySchema:
+              - AttributeName: "userId"
+                KeyType: "HASH"
+            Projection:
+              ProjectionType: "ALL"
+            # ProvisionedThroughput:
+            #   ReadCapacityUnits: 5
+            #   WriteCapacityUnits: 5
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.CUSTOMERS_TABLE}
+    WeeklyBalTable:
+      Type: "AWS::DynamoDB::Table"
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: "id"
+            AttributeType: "S"
+          - AttributeName: "userId"
+            AttributeType: "S"
+          - AttributeName: "weekDate"
+            AttributeType: "N"
+        KeySchema:
+          - AttributeName: "id"
+            KeyType: "HASH"
+        GlobalSecondaryIndexes:
+          - IndexName: userIdIdx
+            KeySchema:
+              - AttributeName: "userId"
+                KeyType: "HASH"
+              - AttributeName: "weekDate"
+                KeyType: "RANGE"
+            Projection:
+              ProjectionType: "ALL"
+            # ProvisionedThroughput:
+            #   ReadCapacityUnits: 5
+            #   WriteCapacityUnits: 5
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.WEEKLYBAL_TABLE}
+plugins:
+  - serverless-offline
+  - serverless-prune-plugin
